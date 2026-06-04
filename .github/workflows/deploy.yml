@@ -1,0 +1,46 @@
+name: Deploy to AUR
+
+on:
+  schedule:
+    - cron: '0 */2 * * *'
+  workflow_dispatch:
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Get latest Feishin release
+        run: |
+          set -e
+
+          JSON=$(curl -s https://api.github.com/repos/jeffvli/feishin/releases/latest)
+
+          VERSION=$(echo "$JSON" | jq -r '.tag_name')
+          echo "Latest version: $VERSION"
+
+          CLEAN_VERSION="${VERSION#v}"
+
+          # update pkgver in PKGBUILD
+          sed -i "s/^pkgver=.*/pkgver=$CLEAN_VERSION/" PKGBUILD
+
+      - name: Ensure clean tree (no artifacts)
+        run: |
+          rm -rf *.pkg.tar.zst *.tar.* *.zip || true
+          git clean -fdx
+
+      - name: Deploy to AUR
+        uses: KSXGitHub/github-actions-deploy-aur@v3
+        with:
+          pkgname: feishin-bin
+          pkgbuild: ./PKGBUILD
+          assets: |
+            PKGBUILD
+          SSH_PRIVATE_KEY: ${{ secrets.AUR_SSH_PRIVATE_KEY }}
+          commit_username: ${{ secrets.AUR_COMMIT_USERNAME }}
+          commit_email: ${{ secrets.AUR_COMMIT_EMAIL }}
+          updpkgsums: false
+          allow_empty_commits: false

@@ -1,6 +1,6 @@
 pkgbase = feishin-bin
         pkgdesc = Modern web-based music player (prebuilt binary)
-        pkgver = 0.0.0
+        pkgver = 1.13.0
         pkgrel = 1
         url = https://github.com/jeffvli/feishin
         arch = x86_64
@@ -12,7 +12,9 @@ pkgbase = feishin-bin
         provides = feishin
         conflicts = feishin
         noextract = feishin.tar.xz
-        source = feishin.tar.xz::https://github.com/jeffvli/feishin/releases/download/v0.0.0/Feishin-linux-x64.tar.xz
+        source = feishin.tar.xz::https://github.com/jeffvli/feishin/releases/download/v1.13.0/Feishin-linux-x64.tar.xz
+        source = feishin.desktop
+        sha256sums = SKIP
         sha256sums = SKIP
 
 pkgname = feishin-bin

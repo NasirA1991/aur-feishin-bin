@@ -1,11 +1,12 @@
 [Desktop Entry]
 Name=Feishin
-GenericName=Music Player
-Comment=A player for your self-hosted music server (Navidrome, Jellyfin, Subsonic)
-Exec=feishin
-Icon=feishin
+GenericName=Music player
+Exec=/usr/bin/feishin
 Terminal=false
 Type=Application
-Categories=AudioVideo;Audio;Player;Music;
+Icon=feishin
 StartupWMClass=feishin
-Keywords=Navidrome;Jellyfin;Subsonic;OpenSubsonic;
+SingleMainWindow=true
+Categories=AudioVideo;Audio;Player;Music;
+Keywords=Navidrome;Jellyfin;Subsonic;OpenSubsonic
+Comment=A player for your self-hosted music server

@@ -23,7 +23,6 @@ package() {
   mkdir -p "$pkgdir/opt/feishin"
   mkdir -p "$pkgdir/usr/bin"
   mkdir -p "$pkgdir/usr/share/applications"
-  mkdir -p "$pkgdir/usr/share/pixmaps"
 
   # Extract full Electron app as-is (IMPORTANT)
   bsdtar -xf feishin.tar.xz -C "$pkgdir/opt/feishin"
@@ -42,11 +41,13 @@ EOF
 
   # Icon
   install -Dm644 \
-    "$pkgdir/opt/feishin/Feishin-linux-x64/resources/assets/icons/icon.png" \
-    "$pkgdir/usr/share/pixmaps/feishin.png"
+    "$pkgdir/opt/feishin/Feishin-linux-x64/resources/assets/icons/512x512.png" \
+    "$pkgdir/usr/share/icons/hicolor/512x512/apps/feishin.png"
 
   # cleanup
   find "$pkgdir" -name ".PKGINFO" -delete
   find "$pkgdir" -name ".BUILDINFO" -delete
   find "$pkgdir" -name ".MTREE" -delete
+
+  gtk-update-icon-cache -q "$pkgdir/usr/share/icons/hicolor" || true
 }

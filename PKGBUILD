@@ -1,85 +1,57 @@
-name: Deploy to AUR
+# Maintainer: Evilleader evilleader91@gmail.com
 
-on:
-  schedule:
-    - cron: '0 */6 * * *'
-  workflow_dispatch:
+pkgname=feishin-bin
+pkgver=1.13.0
+pkgrel=1
+pkgdesc="Modern web-based music player (prebuilt binary)"
+arch=('x86_64')
+url="https://github.com/jeffvli/feishin"
+license=('GPL3')
 
-jobs:
-  deploy:
-    runs-on: ubuntu-latest
+depends=('libnotify' 'nss' 'gtk3' 'alsa-lib')
 
-    steps:
-      - name: Checkout repository
-        uses: actions/checkout@v4
+provides=('feishin')
+conflicts=('feishin')
 
-      - name: Install dependencies
-        run: sudo apt-get update && sudo apt-get install -y jq curl coreutils
+source=(
+  "feishin.tar.xz::https://github.com/jeffvli/feishin/releases/download/v${pkgver}/Feishin-linux-x64.tar.xz"
+)
 
-      - name: Get latest release
-        id: release
-        run: |
-          set -e
+noextract=("feishin.tar.xz")
 
-          JSON=$(curl -s https://api.github.com/repos/jeffvli/feishin/releases/latest)
+sha256sums=()
 
-          VERSION=$(echo "$JSON" | jq -r '.tag_name')
-          CLEAN_VERSION="${VERSION#v}"
+package() {
+  mkdir -p "$pkgdir/opt/feishin"
+  mkdir -p "$pkgdir/usr/bin"
+  mkdir -p "$pkgdir/usr/share/applications"
+  mkdir -p "$pkgdir/usr/share/icons/hicolor/512x512/apps"
 
-          echo "version=$CLEAN_VERSION" >> $GITHUB_OUTPUT
+  bsdtar -xf feishin.tar.xz -C "$pkgdir/opt/feishin"
 
-      - name: Check update
-        id: check
-        run: |
-          set -e
+  cat > "$pkgdir/usr/bin/feishin" << 'EOF'
+#!/bin/bash
+exec /opt/feishin/Feishin-linux-x64/feishin "$@"
+EOF
 
-          CURRENT=$(grep -Po '^pkgver=\K.*' PKGBUILD)
-          LATEST="${{ steps.release.outputs.version }}"
+  chmod +x "$pkgdir/usr/bin/feishin"
 
-          echo "current=$CURRENT"
-          echo "latest=$LATEST"
+  install -Dm644 /dev/stdin "$pkgdir/usr/share/applications/feishin.desktop" << 'EOF'
+[Desktop Entry]
+Name=Feishin
+GenericName=Music player
+Exec=/usr/bin/feishin
+Terminal=false
+Type=Application
+Icon=feishin
+StartupWMClass=feishin
+SingleMainWindow=true
+Categories=AudioVideo;Audio;Player;Music;
+Keywords=Navidrome;Jellyfin;Subsonic;OpenSubsonic
+Comment=A player for your self-hosted music server
+EOF
 
-          if [ "$CURRENT" = "$LATEST" ]; then
-            echo "update=false" >> $GITHUB_OUTPUT
-            exit 0
-          fi
-
-          echo "update=true" >> $GITHUB_OUTPUT
-
-      - name: Update PKGBUILD + SHA
-        if: steps.check.outputs.update == 'true'
-        run: |
-          set -e
-
-          VERSION="${{ steps.release.outputs.version }}"
-
-          # reset pkgver and pkgrel
-          sed -i "s/^pkgver=.*/pkgver=$VERSION/" PKGBUILD
-          sed -i "s/^pkgrel=.*/pkgrel=1/" PKGBUILD
-
-          URL="https://github.com/jeffvli/feishin/releases/download/v${VERSION}/Feishin-linux-x64.tar.xz"
-
-          curl -L -o feishin.tar.xz "$URL"
-
-          SHA256=$(sha256sum feishin.tar.xz | awk '{print $1}')
-
-          # overwrite properly formatted array
-          sed -i "s|^sha256sums=.*|sha256sums=('$SHA256')|" PKGBUILD
-
-      - name: Clean workspace
-        run: |
-          rm -f feishin.tar.xz || true
-          git clean -fdx
-
-      - name: Deploy to AUR
-        if: steps.check.outputs.update == 'true'
-        uses: KSXGitHub/github-actions-deploy-aur@v3
-        with:
-          pkgname: feishin-bin
-          pkgbuild: ./PKGBUILD
-          assets: PKGBUILD
-          SSH_PRIVATE_KEY: ${{ secrets.AUR_SSH_PRIVATE_KEY }}
-          commit_username: ${{ secrets.AUR_COMMIT_USERNAME }}
-          commit_email: ${{ secrets.AUR_COMMIT_EMAIL }}
-          updpkgsums: false
-          allow_empty_commits: false
+  install -Dm644 \
+    "$pkgdir/opt/feishin/Feishin-linux-x64/resources/assets/icons/512x512.png" \
+    "$pkgdir/usr/share/icons/hicolor/512x512/apps/feishin.png"
+}

@@ -5,49 +5,54 @@ on:
     - cron: '0 */6 * * *'
   workflow_dispatch:
 
+permissions:
+  contents: write   # needed to commit the version bump back to this repo
+
+concurrency:
+  group: deploy-to-aur
+  cancel-in-progress: false
+
 jobs:
   deploy:
     runs-on: ubuntu-latest
-
     steps:
       - name: Checkout repository
         uses: actions/checkout@v4
 
       - name: Get latest Feishin release
         id: release
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
           set -e
-
-          JSON=$(curl -s https://api.github.com/repos/jeffvli/feishin/releases/latest)
-
+          JSON=$(curl -sf -H "Authorization: Bearer $GH_TOKEN" \
+            https://api.github.com/repos/jeffvli/feishin/releases/latest)
           VERSION=$(echo "$JSON" | jq -r '.tag_name')
           CLEAN_VERSION="${VERSION#v}"
-
-          echo "version=$CLEAN_VERSION" >> $GITHUB_OUTPUT
+          if [ -z "$CLEAN_VERSION" ] || [ "$CLEAN_VERSION" = "null" ]; then
+            echo "Could not determine latest version, aborting." >&2
+            exit 1
+          fi
+          echo "version=$CLEAN_VERSION" >> "$GITHUB_OUTPUT"
 
       - name: Check if update is needed
         id: check
         run: |
           set -e
-
           CURRENT=$(grep -Po '^pkgver=\K.*' PKGBUILD)
           LATEST="${{ steps.release.outputs.version }}"
-
           echo "current=$CURRENT"
           echo "latest=$LATEST"
-
           if [ "$CURRENT" = "$LATEST" ]; then
-            echo "update=false" >> $GITHUB_OUTPUT
+            echo "update=false" >> "$GITHUB_OUTPUT"
             exit 0
           fi
-
-          echo "update=true" >> $GITHUB_OUTPUT
+          echo "update=true" >> "$GITHUB_OUTPUT"
 
       - name: Update PKGBUILD + SHA256
         if: steps.check.outputs.update == 'true'
         run: |
           set -e
-
           VERSION="${{ steps.release.outputs.version }}"
 
           # update version
@@ -56,14 +61,27 @@ jobs:
 
           # download source
           URL="https://github.com/jeffvli/feishin/releases/download/v${VERSION}/Feishin-linux-x64.tar.xz"
-
-          curl -L -o feishin.tar.xz "$URL"
+          curl -fL --retry 3 -o feishin.tar.xz "$URL"
 
           # calculate sha
           SHA256=$(sha256sum feishin.tar.xz | awk '{print $1}')
 
           # inject sha into PKGBUILD
           sed -i "s|^sha256sums=.*|sha256sums=('$SHA256')|" PKGBUILD
+
+      # This is the missing piece that caused the "always pushes" loop:
+      # without committing the bump back to THIS repo, next run's
+      # "Check if update is needed" step keeps comparing against the old
+      # pkgver forever and update is permanently stuck on true.
+      - name: Commit version bump back to repo
+        if: steps.check.outputs.update == 'true'
+        run: |
+          set -e
+          git config user.name "github-actions[bot]"
+          git config user.email "github-actions[bot]@users.noreply.github.com"
+          git add PKGBUILD
+          git commit -m "Bump pkgver to ${{ steps.release.outputs.version }}"
+          git push
 
       - name: Clean workspace
         run: |
@@ -72,13 +90,11 @@ jobs:
 
       - name: Deploy to AUR
         if: steps.check.outputs.update == 'true'
-        uses: KSXGitHub/github-actions-deploy-aur@v3
+        uses: KSXGitHub/github-actions-deploy-aur@v4.1.3
         with:
           pkgname: feishin-bin
           pkgbuild: ./PKGBUILD
-          assets: |
-            PKGBUILD
-          SSH_PRIVATE_KEY: ${{ secrets.AUR_SSH_PRIVATE_KEY }}
+          ssh_private_key: ${{ secrets.AUR_SSH_PRIVATE_KEY }}
           commit_username: ${{ secrets.AUR_COMMIT_USERNAME }}
           commit_email: ${{ secrets.AUR_COMMIT_EMAIL }}
           updpkgsums: false

@@ -50,7 +50,7 @@ jobs:
           echo "update=true" >> "$GITHUB_OUTPUT"
 
       - name: Update PKGBUILD + SHA256
-        if: steps.check.outputs.update == 'true'
+        if: steps.check.outputs.update == 'true' || github.event_name == 'workflow_dispatch'
         run: |
           set -e
           VERSION="${{ steps.release.outputs.version }}"
@@ -73,15 +73,25 @@ jobs:
       # without committing the bump back to THIS repo, next run's
       # "Check if update is needed" step keeps comparing against the old
       # pkgver forever and update is permanently stuck on true.
+      #
+      # Guarded with a diff check (not just the if:) because a manual
+      # workflow_dispatch run with no real version change still runs the
+      # step above (to recompute the SHA), but may produce zero changes to
+      # PKGBUILD if everything was already correct -- in which case there's
+      # nothing to commit and `git commit` would otherwise fail the job.
       - name: Commit version bump back to repo
-        if: steps.check.outputs.update == 'true'
+        if: steps.check.outputs.update == 'true' || github.event_name == 'workflow_dispatch'
         run: |
           set -e
           git config user.name "github-actions[bot]"
           git config user.email "github-actions[bot]@users.noreply.github.com"
           git add PKGBUILD
-          git commit -m "Bump pkgver to ${{ steps.release.outputs.version }}"
-          git push
+          if git diff --staged --quiet; then
+            echo "No PKGBUILD changes to commit."
+          else
+            git commit -m "Update PKGBUILD (pkgver ${{ steps.release.outputs.version }})"
+            git push
+          fi
 
       - name: Clean workspace
         run: |
@@ -89,7 +99,7 @@ jobs:
           git clean -fdx
 
       - name: Deploy to AUR
-        if: steps.check.outputs.update == 'true'
+        if: steps.check.outputs.update == 'true' || github.event_name == 'workflow_dispatch'
         uses: KSXGitHub/github-actions-deploy-aur@v4.1.3
         with:
           pkgname: feishin-bin

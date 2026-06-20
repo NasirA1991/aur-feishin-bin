@@ -2,7 +2,7 @@
 
 pkgname=feishin-bin
 pkgver=1.13.0
-pkgrel=2
+pkgrel=1
 pkgdesc="Modern web-based music player (prebuilt binary)"
 arch=('x86_64')
 url="https://github.com/jeffvli/feishin"
@@ -19,7 +19,7 @@ source=(
 
 noextract=("feishin.tar.xz")
 
-sha256sums=('PLACEHOLDER')
+sha256sums=('6126eec9e64989a0d344d47a52bad7561ace5b98ebab518027932a1f273a3862')
 
 package() {
   mkdir -p "$pkgdir/opt/feishin"

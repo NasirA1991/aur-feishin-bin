@@ -1,24 +1,19 @@
 name: Deploy to AUR
-
 on:
   schedule:
     - cron: '0 */6 * * *'
   workflow_dispatch:
-
 permissions:
   contents: write   # needed to commit the version bump back to this repo
-
 concurrency:
   group: deploy-to-aur
   cancel-in-progress: false
-
 jobs:
   deploy:
     runs-on: ubuntu-latest
     steps:
       - name: Checkout repository
         uses: actions/checkout@v4
-
       - name: Get latest Feishin release
         id: release
         env:
@@ -34,7 +29,6 @@ jobs:
             exit 1
           fi
           echo "version=$CLEAN_VERSION" >> "$GITHUB_OUTPUT"
-
       - name: Check if update is needed
         id: check
         run: |
@@ -48,27 +42,26 @@ jobs:
             exit 0
           fi
           echo "update=true" >> "$GITHUB_OUTPUT"
-
       - name: Update PKGBUILD + SHA256
         if: steps.check.outputs.update == 'true' || github.event_name == 'workflow_dispatch'
         run: |
           set -e
           VERSION="${{ steps.release.outputs.version }}"
-
           # update version
           sed -i "s/^pkgver=.*/pkgver=$VERSION/" PKGBUILD
           sed -i "s/^pkgrel=.*/pkgrel=1/" PKGBUILD
-
-          # download source
+          # download source -- filename is versioned to avoid stale
+          # cached-source hash mismatches on users' machines (AUR helpers
+          # cache downloads by local filename; a static "feishin.tar.xz"
+          # name means an old cached copy from a previous pkgver can get
+          # reused and fail the sha256sums check on rebuild)
+          FILENAME="Feishin-linux-x64-${VERSION}.tar.xz"
           URL="https://github.com/jeffvli/feishin/releases/download/v${VERSION}/Feishin-linux-x64.tar.xz"
-          curl -fL --retry 3 -o feishin.tar.xz "$URL"
-
+          curl -fL --retry 3 -o "$FILENAME" "$URL"
           # calculate sha
-          SHA256=$(sha256sum feishin.tar.xz | awk '{print $1}')
-
+          SHA256=$(sha256sum "$FILENAME" | awk '{print $1}')
           # inject sha into PKGBUILD
           sed -i "s|^sha256sums=.*|sha256sums=('$SHA256')|" PKGBUILD
-
       # This is the missing piece that caused the "always pushes" loop:
       # without committing the bump back to THIS repo, next run's
       # "Check if update is needed" step keeps comparing against the old
@@ -92,12 +85,10 @@ jobs:
             git commit -m "Update PKGBUILD (pkgver ${{ steps.release.outputs.version }})"
             git push
           fi
-
       - name: Clean workspace
         run: |
-          rm -f feishin.tar.xz || true
+          rm -f Feishin-linux-x64-*.tar.xz || true
           git clean -fdx
-
       - name: Deploy to AUR
         if: steps.check.outputs.update == 'true' || github.event_name == 'workflow_dispatch'
         uses: KSXGitHub/github-actions-deploy-aur@v4.1.3
